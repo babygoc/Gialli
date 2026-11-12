@@ -1,0 +1,7 @@
+INSTALLAZIONE SU GITHUB PAGES
+1. Crea un account su github.com e un repository NUOVO e PUBBLICO (es. "gialli").
+2. Carica tutto il contenuto di questa cartella nel repository, compresa la cartella .github (se dal telefono/browser non la vedi, usa "Add file > Create new file" e scrivi il nome .github/workflows/update.yml incollando il contenuto).
+3. Repository > Settings > Pages > Source: "Deploy from a branch", branch main, cartella /(root). Salva.
+4. Repository > Settings > Actions > General > Workflow permissions: "Read and write permissions". Salva.
+5. Repository > Actions > "Aggiorna dati" > Run workflow. Dopo un minuto compare la cartella data/ con i CSV. Da quel momento si aggiorna da sola ogni giorno alle 6:00 UTC.
+6. Apri https://TUONOME.github.io/gialli/ in Chrome sul telefono, menu (tre puntini) > "Aggiungi a schermata Home".

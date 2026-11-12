@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Gialli – previsione ammonizioni</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#14213d">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect x='28' y='12' width='44' height='76' rx='6' fill='%23ffd60a'/></svg>">
+<style>
+:root{--bg:#eef1f6;--card:#fff;--ink:#14213d;--mute:#5b6784;--line:#d5dbe7;--yellow:#ffd60a;--on-yellow:#14213d;--bar:#14213d;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media(prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#0d1424;--card:#161f36;--ink:#eef1f8;--mute:#9aa6c4;--line:#2a3555;--bar:#ffd60a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.45 "Avenir Next",system-ui,sans-serif}
+main{max-width:560px;margin:0 auto;padding:16px}
+h1{font-size:1.5rem;margin:8px 0 2px;letter-spacing:-.01em}
+.sub{color:var(--mute);margin:0 0 16px;font-size:.9rem}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;display:grid;gap:10px}
+label{font-size:.85rem;color:var(--mute);display:grid;gap:4px}
+select{width:100%;font:inherit;padding:10px;border-radius:8px;border:1px solid var(--line);background:var(--bg);color:var(--ink)}
+select:focus-visible{outline:3px solid var(--yellow);outline-offset:1px}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+#msg{color:var(--mute);font-size:.85rem;margin:10px 2px}
+#msg.err{color:#c0392b}
+#res{margin-top:16px;display:none}
+.hero{display:flex;gap:16px;align-items:center}
+.cardy{flex:none;width:92px;height:128px;border-radius:10px;background:var(--yellow);color:var(--on-yellow);display:grid;place-items:center;font-size:2.4rem;font-weight:800;transform:rotate(-4deg);box-shadow:0 2px 0 rgba(0,0,0,.18)}
+.hero p{margin:0;color:var(--mute)}
+.hero b{color:var(--ink)}
+h2{font-size:1rem;margin:20px 0 8px}
+.row{display:grid;grid-template-columns:70px 1fr 48px;gap:10px;align-items:center;padding:5px 0;font-variant-numeric:tabular-nums}
+.track{height:12px;border-radius:6px;background:var(--line);overflow:hidden}
+.fill{height:100%;background:var(--bar)}
+.row span:last-child{text-align:right;font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:.9rem}
+td,th{padding:7px 4px;border-bottom:1px solid var(--line);text-align:right}
+td:first-child,th:first-child{text-align:left}
+th{color:var(--mute);font-weight:500}
+.note{color:var(--mute);font-size:.8rem;margin-top:18px}
+</style>
+</head>
+<body>
+<main>
+<h1>Gialli</h1>
+<p class="sub">Ammonizioni attese in base ad arbitro e squadre.</p>
+<div class="panel">
+ <label>Campionato<select id="lg"></select></label>
+ <label>Partita in programma<select id="fx"></select></label>
+ <div class="two">
+  <label>Casa<select id="home"></select></label>
+  <label>Ospite<select id="away"></select></label>
+ </div>
+ <label>Arbitro<select id="ref"></select></label>
+</div>
+<div id="msg">Carico i dati…</div>
+<section id="res">
+ <div class="hero"><div class="cardy" id="tot">–</div><div><p>Ammonizioni attese in totale</p><p id="split"></p></div></div>
+ <h2>Probabilità di superare la linea</h2>
+ <div id="over"></div>
+ <h2>Da dove arriva la stima</h2>
+ <table id="tab"></table>
+</section>
+<p class="note">Stime statistiche basate su medie storiche (solo gialli, stagione corrente e precedente). Non sono certezze: un episodio in partita può cambiare tutto.</p>
+</main>
+<script>
+const LG={I1:"Serie A",E0:"Premier League",D1:"Bundesliga",SP1:"La Liga",N1:"Eredivisie"};
+const $=id=>document.getElementById(id), store={};
+const fill=(el,opts)=>{el.innerHTML=opts.map(([v,t])=>`<option value="${String(v).replace(/"/g,'&quot;')}">${t}</option>`).join("")};
+function parseCSV(t){const rows=[];let r=[],c="",q=false;
+ for(let i=0;i<t.length;i++){const ch=t[i];
+  if(q){if(ch=='"'){if(t[i+1]=='"'){c+='"';i++}else q=false}else c+=ch}
+  else if(ch=='"')q=true;
+  else if(ch==","){r.push(c);c=""}
+  else if(ch=="\n"||ch=="\r"){if(ch=="\r"&&t[i+1]=="\n")i++;r.push(c);c="";if(r.length>1||r[0]!=="")rows.push(r);r=[]}
+  else c+=ch}
+ if(c!==""||r.length){r.push(c);rows.push(r)}
+ if(!rows.length)return[];
+ const h=rows.shift().map(s=>s.replace(/^\uFEFF/,"").trim());
+ return rows.map(a=>Object.fromEntries(h.map((k,i)=>[k,(a[i]||"").trim()])))}
+async function get(url){try{const r=await fetch(url,{cache:"no-cache"});if(!r.ok)return[];return parseCSV(await r.text())}catch(e){return[]}}
+const pd=s=>{const m=(s||"").match(/(\d+)\/(\d+)\/(\d+)/);if(!m)return null;let y=+m[3];if(y<100)y+=2000;return new Date(y,m[2]-1,+m[1])};
+const mean=a=>a.length?a.reduce((x,y)=>x+y,0)/a.length:0;
+function pois(l,k){let p=Math.exp(-l),s=p;for(let i=1;i<=k;i++){p*=l/i;s+=p}return s}
+
+async function load(){
+ const fx=await get("data/fixtures.csv");
+ let any=false;
+ for(const c in LG){
+  const rows=[...await get(`data/${c}_prev.csv`),...await get(`data/${c}.csv`)];
+  const games=rows.filter(r=>r.HomeTeam&&r.HY!==""&&r.AY!==""&&!isNaN(+r.HY)&&!isNaN(+r.AY))
+   .map(r=>({h:r.HomeTeam,a:r.AwayTeam,hy:+r.HY,ay:+r.AY,ref:r.Referee||"",d:pd(r.Date)}));
+  const today=new Date();today.setDate(today.getDate()-1);
+  const fixtures=fx.filter(r=>r.Div===c&&r.HomeTeam).map(r=>({h:r.HomeTeam,a:r.AwayTeam,d:pd(r.Date)}))
+   .filter(f=>!f.d||f.d>=today);
+  store[c]={games,fixtures};if(games.length)any=true}
+ if(!any){const m=$("msg");m.className="err";m.textContent="Dati non trovati. Controlla che la cartella data/ esista (esegui l'azione «Aggiorna dati» su GitHub).";return}
+ fill($("lg"),Object.entries(LG));setLeague();
+}
+function setLeague(){
+ const c=$("lg").value,{games,fixtures}=store[c];
+ const teams=[...new Set([...games.flatMap(g=>[g.h,g.a]),...fixtures.flatMap(f=>[f.h,f.a])])].sort();
+ fill($("home"),teams.map(t=>[t,t]));fill($("away"),teams.map(t=>[t,t]));
+ $("away").selectedIndex=Math.min(1,teams.length-1);
+ const refs={};games.forEach(g=>{if(g.ref)refs[g.ref]=(refs[g.ref]||0)+1});
+ const rl=Object.entries(refs).sort((a,b)=>b[1]-a[1]);
+ fill($("ref"),[["","Non lo so (solo squadre)"],...rl.map(([n,k])=>[n,`${n} (${k} partite)`])]);
+ fill($("fx"),[["","Scegli a mano le squadre"],...fixtures.slice(0,40).map((f,i)=>[i,`${f.d?f.d.toLocaleDateString("it-IT",{day:"numeric",month:"short"})+" – ":""}${f.h} – ${f.a}`])]);
+ const last=games.reduce((m,g)=>g.d&&g.d>m?g.d:m,new Date(0));
+ const m=$("msg");m.className="";
+ m.textContent=`${games.length} partite nello storico, l'ultima del ${last.toLocaleDateString("it-IT")}.`+(rl.length?"":" In questo campionato i file non riportano l'arbitro: il calcolo usa solo le squadre.");
+ calc()}
+function calc(){
+ const c=$("lg").value,{games}=store[c];
+ const home=$("home").value,away=$("away").value,ref=$("ref").value;
+ if(!home||!away||home===away){$("res").style.display="none";return}
+ const K=5,KR=8;
+ const lgH=mean(games.map(g=>g.hy)),lgA=mean(games.map(g=>g.ay)),lgT=lgH+lgA,lgTeam=lgT/2;
+ const team=t=>{let rec=0,prov=0,n=0;games.forEach(g=>{if(g.h===t){rec+=g.hy;prov+=g.ay;n++}else if(g.a===t){rec+=g.ay;prov+=g.hy;n++}});
+  return{n,recRaw:n?rec/n:0,provRaw:n?prov/n:0,rec:(rec+K*lgTeam)/(n+K)/lgTeam,prov:(prov+K*lgTeam)/(n+K)/lgTeam}};
+ const H=team(home),A=team(away);
+ let rf=1,rn=0,ra=0;
+ if(ref){const rg=games.filter(g=>g.ref===ref);rn=rg.length;ra=mean(rg.map(g=>g.hy+g.ay));rf=(rn*(ra/lgT)+KR)/(rn+KR)}
+ const eh=lgH*H.rec*A.prov*rf, ea=lgA*A.rec*H.prov*rf, tot=eh+ea;
+ $("tot").textContent=tot.toFixed(1).replace(".",",");
+ $("split").innerHTML=`<b>${home}</b> ${eh.toFixed(1).replace(".",",")}<br><b>${away}</b> ${ea.toFixed(1).replace(".",",")}`;
+ $("over").innerHTML=[2.5,3.5,4.5,5.5,6.5].map(l=>{const p=1-pois(tot,Math.floor(l));
+  return `<div class="row"><span>Over ${String(l).replace(".",",")}</span><div class="track"><div class="fill" style="width:${(p*100).toFixed(0)}%"></div></div><span>${(p*100).toFixed(0)}%</span></div>`}).join("");
+ const f=x=>x.toFixed(2).replace(".",",");
+ $("tab").innerHTML=`<tr><th></th><th>Media</th><th>Partite</th></tr>
+ <tr><td>Campionato (gialli a partita)</td><td>${f(lgT)}</td><td>${games.length}</td></tr>
+ <tr><td>${ref?ref:"Arbitro non scelto"}</td><td>${ref?f(ra):"–"}</td><td>${ref?rn:"–"}</td></tr>
+ <tr><td>${home}: presi / causati</td><td>${f(H.recRaw)} / ${f(H.provRaw)}</td><td>${H.n}</td></tr>
+ <tr><td>${away}: presi / causati</td><td>${f(A.recRaw)} / ${f(A.provRaw)}</td><td>${A.n}</td></tr>
+ <tr><td>Peso arbitro sulla stima</td><td>×${f(rf)}</td><td></td></tr>`;
+ $("res").style.display="block"}
+$("lg").onchange=setLeague;
+["home","away","ref"].forEach(i=>$(i).onchange=calc);
+$("fx").onchange=()=>{const v=$("fx").value;if(v==="")return;const f=store[$("lg").value].fixtures[+v];
+ const set=(el,t)=>{[...el.options].forEach((o,i)=>{if(o.value===t)el.selectedIndex=i})};set($("home"),f.h);set($("away"),f.a);calc()};
+load();
+</script>
+</body>
+</html>
