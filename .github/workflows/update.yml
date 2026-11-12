@@ -1,0 +1,29 @@
+name: Aggiorna dati
+on:
+  schedule:
+    - cron: "0 6 * * *"
+  workflow_dispatch:
+permissions:
+  contents: write
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Scarica i CSV
+        run: |
+          mkdir -p data
+          yy=$((10#$(date +%y))); mm=$((10#$(date +%m)))
+          if [ $mm -ge 7 ]; then a=$yy; else a=$((yy-1)); fi
+          cur=$(printf "%02d%02d" $a $((a+1)))
+          prev=$(printf "%02d%02d" $((a-1)) $a)
+          for c in I1 E0 D1 SP1 N1; do
+            curl -fsSL -o data/$c.csv "https://www.football-data.co.uk/mmz4281/$cur/$c.csv" || echo "manca $c $cur"
+            curl -fsSL -o data/${c}_prev.csv "https://www.football-data.co.uk/mmz4281/$prev/$c.csv" || echo "manca $c $prev"
+          done
+          curl -fsSL -o data/fixtures.csv "https://www.football-data.co.uk/fixtures.csv" || echo "manca fixtures"
+      - name: Salva
+        run: |
+          git config user.name "bot"; git config user.email "bot@users.noreply.github.com"
+          git add data
+          git diff --staged --quiet || (git commit -m "Aggiorna dati" && git push)
